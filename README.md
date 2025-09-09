@@ -156,7 +156,13 @@ http://localhost:8081/actuator/metrics/ai.total.tokens
   - [LLM 系列（三）：架构模式篇](https://mp.weixin.qq.com/s/d6Y76I_Vxfmj6wa5sAN3uQ)
   - [LLM 系列（四）：神奇数字篇](https://mp.weixin.qq.com/s/tEozMs4QWDYx5vrhitA9uQ)
   - [LLM 系列（五）：模型训练篇](https://mp.weixin.qq.com/s/TK8rTcrjS1pfigQxj2mq8A)
-  - [LLM 系列（五）：模型推理篇](https://mp.weixin.qq.com/s/tjXme2CWnUxLmawDDiylWQ)
+  - [LLM 系列（六）：模型推理篇](https://mp.weixin.qq.com/s/tjXme2CWnUxLmawDDiylWQ)
+  - [LLM 系列（七）：数学概念篇](https://mp.weixin.qq.com/s/SBtmPoWtAoguWFUVPB1PGQ)
+  - [LLM 系列（八）：RAG 篇](https://mp.weixin.qq.com/s/y4yAGqs6p4PhErPmRKtDkg)
+  - [LLM 系列（九）：RAG 番外篇-从文档到向量](https://mp.weixin.qq.com/s/HojxR-tC5Gxn3tsxCz17Ow)
+  - [LLM 系列（十）：RAG 番外篇-向量检索](https://mp.weixin.qq.com/s/QFnfBU2we_4UG6v4spEFgA)
+  - [LLM 系列（十一）：从 DeepSeek UE8M0 来回顾精度革命](https://mp.weixin.qq.com/s/E_AeSOGYzoynm5hVicaKfw)
+  - [LLM 系列（十二）：解读 Function Calling](https://mp.weixin.qq.com/s/RiILquzDnKZCaZG8nry2Eg)
 
 #### 视频系列
 - [How to Build Agents with Spring AI](https://www.youtube.com/watch?v=d7m6nJxfi0g)
