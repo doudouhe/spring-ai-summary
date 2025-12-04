@@ -627,3 +627,33 @@ ToolCallbackResolver toolCallbackResolver(List<FunctionCallback> toolCallbacks) 
 
 `ToolCallbackResolver` 在运行时被 `ToolCallingManager` 使用，用于动态解析工具，同时支持框架控制的工具执行方式和用户控制的工具执行方式。
 
+## 新增工具功能
+
+在本优化中，我们添加了以下新的常用工具调用功能：
+
+### 1. 网络搜索工具 (WebSearchTools)
+- `webSearch(query)` - 执行网络搜索并返回结果
+- 使用 DuckDuckGo API 作为免费搜索服务
+
+### 2. 高级计算器工具 (CalculatorTools)
+- `evaluateExpression(expression)` - 评估数学表达式
+- `calculate(operation, operand1, operand2)` - 执行基本算术运算
+- `squareRoot(number)` - 计算平方根
+- `logarithm(number)` - 计算自然对数
+- `factorial(number)` - 计算阶乘
+
+### 3. 货币转换工具 (CurrencyConversionTools)
+- `convertCurrency(fromCurrency, toCurrency, amount)` - 转换货币
+- `getExchangeRate(fromCurrency, toCurrency)` - 获取汇率
+
+### 4. URL 内容获取工具 (UrlContentTools)
+- `fetchUrlContent(url)` - 从 URL 获取内容
+- `fetchPageTitle(url)` - 获取网页标题
+
+### 5. 文件写入工具 (FileWriterTools)
+- `writeFile(filePath, content)` - 写入内容到文件
+- `appendToFile(filePath, content)` - 追加内容到文件
+- `createDirectory(dirPath)` - 创建目录
+
+这些新工具扩展了 Spring AI 工具调用的功能，使 AI 模型能够执行更多实用操作，如网络搜索、复杂计算、货币转换等，从而增强 AI 应用的能力和实用性。
+
