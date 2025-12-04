@@ -22,6 +22,6 @@ jobs:
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OPENAI_API_BASE_URL: 'https://generativelanguage.googleapis.com/v1'
-          OPENAI_API_MODEL: 'gemini-2.5-pro'
-          MAX_CHUNK_SIZE: '12000'  # Gemini supports larger context
+          OPENAI_API_BASE_URL: 'https://apis.iflow.cn/v1'
+          OPENAI_API_MODEL: 'qwen3-coder-plus'
+          MAX_CHUNK_SIZE: '10000'  # Gemini supports larger context
