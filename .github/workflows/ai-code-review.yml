@@ -10,7 +10,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -18,7 +18,7 @@ jobs:
           fetch-depth: 0  # Important for commit history analysis
 
       - name: Run AI Code Review
-        uses: zxcnoname666/AI-Code-Review@v1
+        uses: zxcnoname666/AI-Code-Review@v1.2.0
         with:
           GITHUB_TOKEN: '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'
           OPENAI_API_KEY: 'AIzaSyBPsHcJ8mIEXnGyvzUDE_oEvV34M_6ktik'
