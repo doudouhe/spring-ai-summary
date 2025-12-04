@@ -1,0 +1,27 @@
+name: AI Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  ai-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Important for commit history analysis
+
+      - name: Run AI Code Review
+        uses: zxcnoname666/AI-Code-Review@v1
+        with:
+          GITHUB_TOKEN: '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'
+          OPENAI_API_KEY: 'AIzaSyBPsHcJ8mIEXnGyvzUDE_oEvV34M_6ktik'
+          OPENAI_API_BASE_URL: 'https://generativelanguage.googleapis.com/v1'
+          OPENAI_API_MODEL: 'gemini-2.5-pro'
+          MAX_CHUNK_SIZE: '12000'  # Gemini supports larger context
