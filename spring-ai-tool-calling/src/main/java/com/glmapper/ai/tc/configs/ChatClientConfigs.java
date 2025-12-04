@@ -2,8 +2,13 @@ package com.glmapper.ai.tc.configs;
 
 import com.glmapper.ai.tc.tools.function.WeatherRequest;
 import com.glmapper.ai.tc.tools.function.WeatherService;
+import com.glmapper.ai.tc.tools.methods.CalculatorTools;
+import com.glmapper.ai.tc.tools.methods.CurrencyConversionTools;
 import com.glmapper.ai.tc.tools.methods.DateTimeTools;
 import com.glmapper.ai.tc.tools.methods.FileReaderTools;
+import com.glmapper.ai.tc.tools.methods.FileWriterTools;
+import com.glmapper.ai.tc.tools.methods.UrlContentTools;
+import com.glmapper.ai.tc.tools.methods.WebSearchTools;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -59,7 +64,15 @@ public class ChatClientConfigs {
 
         // 与上面的代码等价
         return ChatClient.builder(chatModel)
-                .defaultTools(new DateTimeTools(), new FileReaderTools())
+                .defaultTools(
+                    new DateTimeTools(),
+                    new FileReaderTools(),
+                    new FileWriterTools(),
+                    new CalculatorTools(),
+                    new CurrencyConversionTools(),
+                    new WebSearchTools(),
+                    new UrlContentTools()
+                )
                 .defaultToolCallbacks(toolCallback)
                 .defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build())
                 .defaultSystem("You are deepseek chat bot, you answer questions in a concise and accurate manner.")
