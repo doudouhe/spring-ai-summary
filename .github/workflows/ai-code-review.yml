@@ -20,7 +20,7 @@ jobs:
       - name: Run AI Code Review
         uses: zxcnoname666/AI-Code-Review@v1.2.0
         with:
-          GITHUB_TOKEN: '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'
+          GITHUB_TOKEN: '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'
           OPENAI_API_KEY: 'AIzaSyBPsHcJ8mIEXnGyvzUDE_oEvV34M_6ktik'
           OPENAI_API_BASE_URL: 'https://generativelanguage.googleapis.com/v1'
           OPENAI_API_MODEL: 'gemini-2.5-pro'
