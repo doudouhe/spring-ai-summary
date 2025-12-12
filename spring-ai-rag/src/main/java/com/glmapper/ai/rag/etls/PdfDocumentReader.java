@@ -1,59 +1,135 @@
 package com.glmapper.ai.rag.etls;
 
+import com.glmapper.ai.rag.etls.base.BaseDocumentReader;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.reader.ExtractedTextFormatter;
 import org.springframework.ai.reader.pdf.PagePdfDocumentReader;
 import org.springframework.ai.reader.pdf.ParagraphPdfDocumentReader;
 import org.springframework.ai.reader.pdf.config.PdfDocumentReaderConfig;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * @Classname PdfDocumentReader
- * @Description PdfDocumentReader
+ * @Description Optimized PdfDocumentReader with caching and async processing
  * @Date 2025/6/4 09:49
  * @Created by glmapper
  */
+@Slf4j
 @Component
-public class PdfDocumentReader {
+public class PdfDocumentReader extends BaseDocumentReader {
+    
+    @Value("${rag.pdf.page-top-margin:0}")
+    private int pageTopMargin;
+    
+    @Value("${rag.pdf.top-lines-to-delete:0}")
+    private int topLinesToDelete;
+    
+    @Value("${rag.pdf.pages-per-document:1}")
+    private int pagesPerDocument;
+    
+    private final PdfDocumentReaderConfig defaultPageConfig;
+    private final PdfDocumentReaderConfig defaultParagraphConfig;
+
+    public PdfDocumentReader() {
+        this.defaultPageConfig = PdfDocumentReaderConfig.builder()
+                .withPageTopMargin(pageTopMargin)
+                .withPageExtractedTextFormatter(ExtractedTextFormatter.builder()
+                        .withNumberOfTopTextLinesToDelete(topLinesToDelete)
+                        .build())
+                .withPagesPerDocument(pagesPerDocument)
+                .build();
+                
+        this.defaultParagraphConfig = PdfDocumentReaderConfig.builder()
+                .withPageTopMargin(pageTopMargin)
+                .withPageExtractedTextFormatter(ExtractedTextFormatter.builder()
+                        .withNumberOfTopTextLinesToDelete(topLinesToDelete)
+                        .build())
+                .build();
+    }
 
     /**
      * PagePdfDocumentReader 是依赖 Apache PdfBox 来解析 pdf
-     *
-     * @return
      */
     public List<Document> getDocsFromPdf() {
-        PagePdfDocumentReader pdfReader = new PagePdfDocumentReader("classpath:files/test_page.pdf", PdfDocumentReaderConfig.builder()
-                // 设置页面顶部边距为 0
-                .withPageTopMargin(0)
-                // 设置提取的文本格式化器，删除顶部的文本行
-                .withPageExtractedTextFormatter(ExtractedTextFormatter.builder()
-                        .withNumberOfTopTextLinesToDelete(0)
-                        .build())
-                // 设置每个文档的页面数为 1
-                .withPagesPerDocument(1).build());
-        return pdfReader.read();
+        return getDocsFromPdf("classpath:files/test_page.pdf");
     }
-
-    /**
-     * 该方法使用 ParagraphPdfDocumentReader 来读取 PDF 文档中的段落。
-     * <p>
-     * 使用 PDF 目录（例如目录 TOC）信息将输入的 PDF 拆分为文本段落，并为每个段落输出一个单独的 Document
-     *
-     * @return
-     */
+    
+    public List<Document> getDocsFromPdf(String resourcePath) {
+        Resource resource = getResourceFromPath(resourcePath);
+        return readDocumentsWithPageConfig(resource);
+    }
+    
+    public CompletableFuture<List<Document>> getDocsFromPdfAsync(String resourcePath) {
+        Resource resource = getResourceFromPath(resourcePath);
+        return CompletableFuture.supplyAsync(() -> readDocumentsWithPageConfig(resource));
+    }
+    
     public List<Document> getDocsFromPdfWithCatalog() {
-        ParagraphPdfDocumentReader pdfReader = new ParagraphPdfDocumentReader("classpath:files/test_paragraph.pdf", PdfDocumentReaderConfig.builder()
-                // 设置页面顶部边距为 0
-                .withPageTopMargin(0)
-                // 设置提取的文本格式化器，删除顶部的文本行
-                .withPageExtractedTextFormatter(ExtractedTextFormatter.builder()
-                        .withNumberOfTopTextLinesToDelete(0)
-                        .build())
-                // 设置每个文档的页面数为 1
-                .withPagesPerDocument(1).build());
-        return pdfReader.read();
+        return getDocsFromPdfWithCatalog("classpath:files/test_paragraph.pdf");
+    }
+    
+    public List<Document> getDocsFromPdfWithCatalog(String resourcePath) {
+        Resource resource = getResourceFromPath(resourcePath);
+        return readDocumentsWithParagraphConfig(resource);
+    }
+    
+    public List<Document> getDocsFromPdfWithCustomConfig(String resourcePath, PdfDocumentReaderConfig config) {
+        Resource resource = getResourceFromPath(resourcePath);
+        try {
+            validateResource(resource);
+            PagePdfDocumentReader pdfReader = new PagePdfDocumentReader(resource, config);
+            List<Document> documents = pdfReader.read();
+            addResourceMetadata(documents, resource);
+            return documents;
+        } catch (IOException e) {
+            log.error("Failed to load PDF document: {}", resourcePath, e);
+            throw new RuntimeException("Failed to load PDF document", e);
+        }
+    }
+    
+    private List<Document> readDocumentsWithPageConfig(Resource resource) {
+        try {
+            validateResource(resource);
+            PagePdfDocumentReader pdfReader = new PagePdfDocumentReader(resource, defaultPageConfig);
+            List<Document> documents = pdfReader.read();
+            addResourceMetadata(documents, resource);
+            return documents;
+        } catch (IOException e) {
+            log.error("Failed to read PDF with page config", e);
+            throw new RuntimeException("Failed to read PDF", e);
+        }
+    }
+    
+    private List<Document> readDocumentsWithParagraphConfig(Resource resource) {
+        try {
+            validateResource(resource);
+            ParagraphPdfDocumentReader pdfReader = new ParagraphPdfDocumentReader(resource, defaultParagraphConfig);
+            List<Document> documents = pdfReader.read();
+            addResourceMetadata(documents, resource);
+            return documents;
+        } catch (IOException e) {
+            log.error("Failed to read PDF with paragraph config", e);
+            throw new RuntimeException("Failed to read PDF", e);
+        }
+    }
+    
+    private Resource getResourceFromPath(String resourcePath) {
+        if (resourcePath.startsWith("classpath:")) {
+            return new org.springframework.core.io.ClassPathResource(resourcePath.substring(10));
+        } else {
+            return new org.springframework.core.io.FileSystemResource(resourcePath);
+        }
     }
 
+    @Override
+    protected List<Document> doReadDocuments(Resource resource) throws IOException {
+        return readDocumentsWithPageConfig(resource);
+    }
 }
