@@ -96,7 +96,11 @@ public class MilvusClientConfigs implements InitializingBean {
         }
 
         try {
-            return milvusClient.hasCollection(collectionName).getHasCollection();
+            return milvusClient.hasCollection(
+                io.milvus.param.collection.HasCollectionParam.newBuilder()
+                    .withCollectionName(collectionName)
+                    .build()
+            ).getData();
         } catch (Exception e) {
             log.warn("Failed to check collection status", e);
             return false;
@@ -117,7 +121,7 @@ public class MilvusClientConfigs implements InitializingBean {
                     .withCollectionName(collectionName)
                     .build()
             );
-            return stats.getStats().toString();
+            return stats.getStatus().toString();
         } catch (Exception e) {
             log.error("Failed to get collection statistics", e);
             return "Failed to retrieve statistics: " + e.getMessage();

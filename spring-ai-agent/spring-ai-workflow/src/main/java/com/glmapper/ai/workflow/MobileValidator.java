@@ -29,4 +29,3 @@ public class MobileValidator implements Validator{
         return message;
     }
 }
-
