@@ -4,6 +4,7 @@ import com.glmapper.ai.evaluator.optimizer.model.EvaluationRequest;
 import com.glmapper.ai.evaluator.optimizer.model.EvaluationResponse;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 /**
@@ -11,12 +12,14 @@ import org.springframework.stereotype.Service;
  * 
  * @author glmapper
  */
+@Slf4j
 @Service
 public class EvaluatorService {
 
     private final ChatClient chatClient;
+    private final EvaluatorOptimizerProperties properties;
 
-    private static final String EVALUATION_PROMPT = 
+    private static final String EVALUATION_PROMPT =
             "You are an expert evaluator. Please evaluate the following solution against the given task and criteria.\n" +
             "\n" +
             "Original Task: {task}\n" +
@@ -38,31 +41,42 @@ public class EvaluatorService {
             "ACCEPTABLE: [YES/NO]\n" +
             "IMPROVEMENTS: [specific suggestions]";
 
-    private static final double ACCEPTABLE_THRESHOLD = 7.0;
-
-    public EvaluatorService(@Qualifier("evaluatorChatClient") ChatClient chatClient) {
+    public EvaluatorService(@Qualifier("evaluatorChatClient") ChatClient chatClient,
+                          EvaluatorOptimizerProperties properties) {
         this.chatClient = chatClient;
+        this.properties = properties;
     }
 
+    @Cacheable(value = "evaluationCache", key = "#request.originalTask + '_' + #request.solution + '_' + (#request.criteria != null ? #request.criteria : '')")
     public EvaluationResponse evaluate(EvaluationRequest request) {
+        log.debug("Starting evaluation for task: {}, iteration: {}", request.getOriginalTask(), request.getIteration());
+
         String prompt = EVALUATION_PROMPT
                 .replace("{task}", request.getOriginalTask())
                 .replace("{solution}", request.getSolution())
                 .replace("{criteria}", request.getCriteria() != null ? request.getCriteria() : getDefaultCriteria());
+
+        log.debug("Generated evaluation prompt: {}", prompt.substring(0, Math.min(prompt.length(), 500)) + "...");
 
         String response = chatClient.prompt()
                 .user(prompt)
                 .call()
                 .content();
 
-        return parseEvaluationResponse(response, request.getIteration());
+        log.debug("Received evaluation response from AI model: {} characters", response.length());
+
+        EvaluationResponse evaluationResponse = parseEvaluationResponse(response, request.getIteration());
+        log.debug("Parsed evaluation result - Score: {}, Acceptable: {}, Iteration: {}",
+                 evaluationResponse.getScore(), evaluationResponse.isAcceptable(), request.getIteration());
+
+        return evaluationResponse;
     }
 
     private EvaluationResponse parseEvaluationResponse(String response, int iteration) {
         try {
             double score = extractScore(response);
             String feedback = extractFeedback(response);
-            boolean isAcceptable = extractAcceptable(response) || score >= ACCEPTABLE_THRESHOLD;
+            boolean isAcceptable = extractAcceptable(response) || score >= properties.getAcceptableThreshold();
             String improvements = extractImprovements(response);
 
             return new EvaluationResponse(score, feedback, isAcceptable, improvements, iteration);
@@ -75,7 +89,12 @@ public class EvaluatorService {
     private double extractScore(String response) {
         try {
             String scoreLine = findLine(response, "SCORE:");
+            if (scoreLine == null) {
+                return 5.0; // Default score if not found
+            }
             String scoreStr = scoreLine.substring(scoreLine.indexOf(":") + 1).trim();
+            // Extract numeric value, allowing for various formats
+            scoreStr = scoreStr.replaceAll("[^0-9.]", "");
             return Double.parseDouble(scoreStr);
         } catch (Exception e) {
             return 5.0; // Default score
@@ -84,16 +103,24 @@ public class EvaluatorService {
 
     private String extractFeedback(String response) {
         try {
-            return findLine(response, "FEEDBACK:").substring("FEEDBACK:".length()).trim();
+            String feedbackLine = findLine(response, "FEEDBACK:");
+            if (feedbackLine == null) {
+                return "No detailed feedback available";
+            }
+            return feedbackLine.substring(feedbackLine.indexOf(":") + 1).trim();
         } catch (Exception e) {
-            return "No detailed feedback available";
+            // Try to extract feedback even if format is not exact
+            return extractSection(response, "FEEDBACK:", "ACCEPTABLE:");
         }
     }
 
     private boolean extractAcceptable(String response) {
         try {
             String acceptableLine = findLine(response, "ACCEPTABLE:");
-            return acceptableLine.toUpperCase().contains("YES");
+            if (acceptableLine == null) {
+                return false;
+            }
+            return acceptableLine.toUpperCase().contains("YES") || acceptableLine.contains("1");
         } catch (Exception e) {
             return false;
         }
@@ -101,27 +128,57 @@ public class EvaluatorService {
 
     private String extractImprovements(String response) {
         try {
-            return findLine(response, "IMPROVEMENTS:").substring("IMPROVEMENTS:".length()).trim();
+            String improvementsLine = findLine(response, "IMPROVEMENTS:");
+            if (improvementsLine == null) {
+                return "No specific improvements suggested";
+            }
+            return improvementsLine.substring(improvementsLine.indexOf(":") + 1).trim();
         } catch (Exception e) {
-            return "No specific improvements suggested";
+            // Try to extract improvements even if format is not exact
+            return extractSection(response, "IMPROVEMENTS:", null);
         }
     }
 
     private String findLine(String response, String prefix) {
-        String[] lines = response.split("\n");
+        String[] lines = response.split("\n|\\r\\n");
         for (String line : lines) {
             if (line.trim().toUpperCase().startsWith(prefix.toUpperCase())) {
                 return line;
             }
         }
-        throw new RuntimeException("Line with prefix '" + prefix + "' not found");
+        return null; // Return null instead of throwing exception
+    }
+
+    /**
+     * Extract content between two markers in the response
+     */
+    private String extractSection(String response, String startMarker, String endMarker) {
+        try {
+            int startIndex = response.toUpperCase().indexOf(startMarker.toUpperCase());
+            if (startIndex == -1) {
+                return "No " + startMarker + " section found";
+            }
+
+            startIndex = response.indexOf(":", startIndex) + 1; // Move past the colon
+
+            int endIndex = response.length();
+            if (endMarker != null) {
+                endIndex = response.toUpperCase().indexOf(endMarker.toUpperCase(), startIndex);
+                if (endIndex == -1) endIndex = response.length();
+            }
+
+            return response.substring(startIndex, endIndex).trim();
+        } catch (Exception e) {
+            return "Could not extract " + startMarker + " section";
+        }
     }
 
     private String getDefaultCriteria() {
-        return "- Correctness: Does the solution solve the problem correctly?\n" +
+        return String.format("- Correctness: Does the solution solve the problem correctly?\n" +
                "- Completeness: Are all requirements addressed?\n" +
                "- Clarity: Is the solution easy to understand?\n" +
                "- Best Practices: Does it follow good coding/design practices?\n" +
-               "- Efficiency: Is the solution reasonably efficient?";
+               "- Efficiency: Is the solution reasonably efficient?\n" +
+               "- Minimum acceptable score: %.1f", properties.getAcceptableThreshold());
     }
 }

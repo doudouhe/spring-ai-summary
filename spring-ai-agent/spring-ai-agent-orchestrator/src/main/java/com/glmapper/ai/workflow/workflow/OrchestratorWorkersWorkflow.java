@@ -2,7 +2,9 @@ package com.glmapper.ai.workflow.workflow;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.glmapper.ai.workflow.config.OrchestratorWorkersProperties;
 import com.glmapper.ai.workflow.workflow.model.WorkflowResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -13,6 +15,7 @@ import org.springframework.stereotype.Component;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 
 /**
@@ -23,20 +26,31 @@ import java.util.stream.Collectors;
  */
 
 @Component
+@Slf4j
 public class OrchestratorWorkersWorkflow {
 
     @Autowired
     private ChatClient chatClient;
 
+    @Autowired
+    private OrchestratorWorkersProperties properties;
+
+    @Autowired
+    private ExecutorService orchestratorExecutorService;
+
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     public WorkflowResponse process(String taskDescription) {
+        log.info("Starting orchestrator workflow for task: {}", taskDescription);
         try {
             // 1. 用大模型拆解任务
             LlmSubtaskResult subtaskResult = callLlmForSubtasks(taskDescription);
             List<String> subtasks = subtaskResult.subtasks;
             String analysis = subtaskResult.analysis;
+            log.debug("Task decomposition completed. Found {} subtasks", subtasks != null ? subtasks.size() : 0);
+
             if (subtasks == null || subtasks.isEmpty()) {
+                log.warn("AI model failed to decompose the task into subtasks");
                 return WorkflowResponse.builder()
                         .success(false)
                         .errorMessage("大模型未能拆解出子任务")
@@ -45,16 +59,29 @@ public class OrchestratorWorkersWorkflow {
                         .build();
             }
 
-            // 2. Workers process subtasks in parallel
-            List<String> workerResponses = subtasks.stream()
-                    .map(subtask -> CompletableFuture.supplyAsync(() -> workerProcess(subtask)))
-                    .collect(Collectors.toList())
-                    .stream()
-                    .map(CompletableFuture::join)
-                    .collect(Collectors.toList());
+            // 2. Workers process subtasks in parallel using configurable thread pool
+            List<String> workerResponses;
+            if (properties.isParallelExecution()) {
+                log.debug("Starting parallel execution with thread pool for {} subtasks", subtasks.size());
+                workerResponses = subtasks.stream()
+                        .map(subtask -> CompletableFuture.supplyAsync(() -> workerProcess(subtask), orchestratorExecutorService))
+                        .collect(Collectors.toList())
+                        .stream()
+                        .map(CompletableFuture::join)
+                        .collect(Collectors.toList());
+                log.debug("Parallel execution completed");
+            } else {
+                log.debug("Starting sequential execution for {} subtasks", subtasks.size());
+                // Sequential execution if parallel execution is disabled
+                workerResponses = subtasks.stream()
+                        .map(this::workerProcess)
+                        .collect(Collectors.toList());
+                log.debug("Sequential execution completed");
+            }
 
             // 3. Results are combined into final response
             String combined = String.join("\n", workerResponses);
+            log.info("Orchestrator workflow completed successfully for task: {}", taskDescription);
             return WorkflowResponse.builder()
                     .content(combined)
                     .success(true)
@@ -63,6 +90,7 @@ public class OrchestratorWorkersWorkflow {
                     .workerResponses(workerResponses)
                     .build();
         } catch (Exception e) {
+            log.error("Orchestrator/Worker execution failed for task: {}", taskDescription, e);
             return WorkflowResponse.builder()
                     .success(false)
                     .errorMessage("Orchestrator/Worker 执行失败: " + e.getMessage())
@@ -72,9 +100,19 @@ public class OrchestratorWorkersWorkflow {
 
     // 用大模型拆解任务，返回原始分析和子任务列表
     private LlmSubtaskResult callLlmForSubtasks(String taskDescription) throws Exception {
-        List messages = List.of(new SystemMessage("你是一个任务拆解专家。请将用户输入的复杂任务描述拆解为若干可以独立执行的子任务，输出格式为 JSON 数组，每个元素为一个子任务字符串。"), new UserMessage(taskDescription));
+        List messages = List.of(
+            new SystemMessage(properties.getTaskDecompositionPrompt()),
+            new UserMessage(taskDescription)
+        );
         Prompt prompt = new Prompt(messages);
-        String modelResult = chatClient.prompt(prompt).call().content();
+        String modelResult;
+        try {
+            modelResult = chatClient.prompt(prompt).call().content();
+        } catch (Exception e) {
+            // Return error result if AI model call fails
+            return new LlmSubtaskResult("Error: Failed to call AI model - " + e.getMessage(), null);
+        }
+
         // 解析为 List<String>
         List<String> subtasks;
         try {
@@ -86,6 +124,11 @@ public class OrchestratorWorkersWorkflow {
                     .map(String::trim)
                     .filter(s -> !s.isEmpty())
                     .collect(Collectors.toList());
+
+            // If still no subtasks after splitting, return error
+            if (subtasks.isEmpty()) {
+                subtasks = null;
+            }
         }
         return new LlmSubtaskResult(modelResult, subtasks);
     }
@@ -95,14 +138,19 @@ public class OrchestratorWorkersWorkflow {
     }
 
     private String workerProcess(String subtask) {
+        log.debug("Starting worker process for subtask: {}", subtask.substring(0, Math.min(subtask.length(), 100)));
         try {
-            // 你可以根据业务自定义 system prompt
-            String systemPrompt = "你是一个高效的AI助手，请认真完成以下子任务：";
-            List messages = List.of(new SystemMessage(systemPrompt), new UserMessage(subtask));
+            List messages = List.of(
+                new SystemMessage(properties.getWorkerProcessingPrompt()),
+                new UserMessage(subtask)
+            );
             Prompt prompt = new Prompt(messages);
             // 直接用 chatClient 让大模型"执行"子任务
-            return chatClient.prompt(prompt).call().content();
+            String result = chatClient.prompt(prompt).call().content();
+            log.debug("Completed worker process for subtask, result length: {}", result.length());
+            return result;
         } catch (Exception e) {
+            log.error("Worker process failed for subtask: {}", subtask, e);
             // 失败时返回错误信息，便于排查
             return "[Worker Error] " + e.getMessage();
         }

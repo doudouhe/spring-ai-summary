@@ -8,10 +8,16 @@ public class NumbericValidator implements Validator {
     private String message;
 
     public boolean validate(String str) {
+        if (str == null) {
+            this.message = "输入字符串为null";
+            return false;
+        }
+
         if (StringUtils.isEmpty(str)) {
             this.message = "输入字符串为空";
             return false;
         }
+
         Matcher m = NUMBERIC.matcher(str);
         if (!m.matches()) {
             this.message = "输入字符串必须全部由数字组成";

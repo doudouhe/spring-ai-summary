@@ -38,3 +38,9 @@ logging:
   level:
     com.glmapper.ai.evaluator.optimizer: DEBUG
     org.springframework.ai: DEBUG
+
+# Evaluator-Optimizer Configuration
+evaluator-optimizer:
+  max-iterations: 3
+  convergence-threshold: 8.5
+  acceptable-threshold: 7.0
