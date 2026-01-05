@@ -37,7 +37,7 @@ public abstract class BaseDocumentReader {
     /**
      * Read documents with caching support
      */
-    @Cacheable(value = "documents", key = "#resource.getFilename() + '_' + #resource.contentLength()")
+    @Cacheable(value = "documents", key = "#resource.getFilename() + '_' + #resource.hashCode()")
     public List<Document> readDocuments(Resource resource) {
         try {
             log.debug("Reading documents from resource: {}", resource.getFilename());
