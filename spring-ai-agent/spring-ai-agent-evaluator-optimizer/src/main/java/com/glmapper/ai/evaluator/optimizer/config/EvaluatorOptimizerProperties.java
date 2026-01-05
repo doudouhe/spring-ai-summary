@@ -16,12 +16,14 @@ public class EvaluatorOptimizerProperties {
     private int maxIterations = 3;
 
     /**
-     * Convergence threshold - minimum score to consider solution acceptable
+     * Convergence threshold - target score at which the optimizer stops iterating.
+     * When the solution is acceptable AND score >= this threshold, the optimization loop converges.
      */
     private double convergenceThreshold = 8.5;
 
     /**
-     * Acceptable threshold - minimum score to consider solution acceptable
+     * Acceptable threshold - minimum score to consider a solution acceptable.
+     * Solutions meeting this bar are valid but may continue optimizing until convergence.
      */
     private double acceptableThreshold = 7.0;
 
