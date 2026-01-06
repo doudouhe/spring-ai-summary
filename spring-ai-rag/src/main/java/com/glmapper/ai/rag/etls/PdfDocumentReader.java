@@ -7,6 +7,7 @@ import org.springframework.ai.reader.ExtractedTextFormatter;
 import org.springframework.ai.reader.pdf.PagePdfDocumentReader;
 import org.springframework.ai.reader.pdf.ParagraphPdfDocumentReader;
 import org.springframework.ai.reader.pdf.config.PdfDocumentReaderConfig;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
@@ -27,17 +28,18 @@ public class PdfDocumentReader extends BaseDocumentReader {
     
     @Value("${rag.pdf.page-top-margin:0}")
     private int pageTopMargin;
-    
+
     @Value("${rag.pdf.top-lines-to-delete:0}")
     private int topLinesToDelete;
-    
+
     @Value("${rag.pdf.pages-per-document:1}")
     private int pagesPerDocument;
-    
-    private final PdfDocumentReaderConfig defaultPageConfig;
-    private final PdfDocumentReaderConfig defaultParagraphConfig;
 
-    public PdfDocumentReader() {
+    private PdfDocumentReaderConfig defaultPageConfig;
+    private PdfDocumentReaderConfig defaultParagraphConfig;
+
+    @PostConstruct
+    public void init() {
         this.defaultPageConfig = PdfDocumentReaderConfig.builder()
                 .withPageTopMargin(pageTopMargin)
                 .withPageExtractedTextFormatter(ExtractedTextFormatter.builder()
@@ -45,7 +47,7 @@ public class PdfDocumentReader extends BaseDocumentReader {
                         .build())
                 .withPagesPerDocument(pagesPerDocument)
                 .build();
-                
+
         this.defaultParagraphConfig = PdfDocumentReaderConfig.builder()
                 .withPageTopMargin(pageTopMargin)
                 .withPageExtractedTextFormatter(ExtractedTextFormatter.builder()
